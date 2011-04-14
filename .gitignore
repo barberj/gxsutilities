@@ -1,2 +1,5 @@
 # Ignore compiled Source
 *.pyc
+
+# Ignore Samples Directory
+sample_sql
