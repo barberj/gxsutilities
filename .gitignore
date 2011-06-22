@@ -1,5 +1,7 @@
 # Ignore compiled Source
 *.pyc
+*.swp
+*.csv
 
 # Ignore Samples Directory
 sample_sql
