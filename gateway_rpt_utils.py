@@ -8,6 +8,11 @@ Version .01
 """
 
 import os, os.path, re, types
+from datetime import datetime, timedelta
+
+# TY :: http://pingbacks.wordpress.com/2010/12/21/python-logging-tutorial/
+import logging
+logging.root.level = logging.DEBUG
 
 def get_reports(path):
     """
@@ -18,79 +23,62 @@ def get_reports(path):
     files = os.listdir(path)
     abspath_files = []
     for f in files:
-        abspath_files.append(os.path.abspath('%s\\%s'%(path,f)))
+        abspath_files.append(os.path.abspath(r'%s\%s'%(path,f)))
     return abspath_files
 
-def is_consecutive_hour(first_hour,second_hour):
+def fill_missing_dt(GatewayByDateTimes):
     """
-    Determines if the first_hour is followed by the second hour.
-    """
-    if first_hour > 24 or second_hour > 24:
-        raise Exception("Hours must be with in 24 Hour Range")
-    if first_hour == 24 and second_hour == 00:
-        return True
-    if second_hour == (first_hour + 1):
-        return True
-    return False
-
-def fill_in_hours(gateway,date,start_hour,next_hour):
-    missing = []
-    for i in range(int(start_hour),int(next_hour)):
-        missing.append( (date,'%02d'%i,gateway,0,0) )
-    return missing
-
-def check_for_missing_hours(hour_list,gateway,date,next_hour):
-    """
-    Returns Tuples for missing hours filling in the provided gateway and 0 for counts
+    If a Date is missing an hour add it with 0 values 
     """
 
-    missing = []
+    last = None
+    filled = []
 
-    # We have an empty hour_list and the first hour to add isn't 0
-    if not hour_list and int(next_hour) != 0:
-        return fill_in_hours(gateway,date,0,next_hour)
-    else:
-        # Okay we have a list need to add missing hours
-        if int(next_hour) != 0:
-            if hour_list[0][0] == date:
-                return fill_in_hours(gateway,date,hour_list[0][1],next_hour)
-            else:
-                # New Day. Lets make sure we finished off prior day
-                if hour_list[0][1] != 23:
-                    missing +=  fill_in_hours(gateway,date,hour_list[0][1],24)
-                # Now check current day
-                if int(next_hour) != 0:
-                    missing += fill_in_hours(gateway,hour_list[0][0],0,next_hour)
-    return missing
+    for gwbdt in GatewayByDateTimes:
+        if not last:
+            if gwbdt[0].hour != 0:
+                for i in range(0, gwbdt[0].hour):
+                    filled.append((gwbdt[0] + timedelta(hours=i),gwbdt[1],gwbt[2],0,0))
+        else:
+            # We sorted so we can assume gwbdt is larger then last
+            # Timedelta returns in seconds
+            delta = (gwbdt[0] - last[0]).seconds / 3600
+            for i in range(1,int(delta)):
+                newdt = last[0] + timedelta(hours=i)
+                filled.append((last[0] + timedelta(hours=i),last[1],last[2],0,0))
 
+        # for range exludes last item in range so lets append it
+        last = gwbdt
+        filled.append(gwbdt)
 
-def formGatewayByTime(gateway, data_tuples_list,fill=True):
+    if last[0].hour != 23:
+        filled.append((datetime(last[0].year,last[0].month,last[0].day,23,0),gwbdt[1],gwbdt[2],0,0))
+        filled = fill_missing_dt(filled) 
+
+    return filled
+
+def formGatewayByDateTime(gateway, data_tuples_list):
     """
     Tuples are immutable so we have to create a new tuple
     given the gateway and data associated with it.
 
-    Format ( YYYY/MM/DD, HH, Gateway, Docs, Chars )
+    Format ( datetime object, Gateway, Docs, Chars )
     
     If fill is passed then missing hours are added with data
     counts of 0.
     """
-    gatewayByTime = []
-
-    # Sort. Necessary if we are doing fill.
-    data_tuples_list.sort()
+    gatewayByDateTime = []
 
     for data_tuple in data_tuples_list:
-        if fill:
-            #gatewayByTime += fill_in_hours(gatewayByTime,gateway,data_tuple[0],data_tuple[1])
-            gatewayByTime.extend(check_for_missing_hours(gatewayByTime,gateway,data_tuple[0],data_tuple[1]))
-        gatewayByTime.append( (data_tuple[0], data_tuple[1], gateway, int(data_tuple[2]), int(data_tuple[3])) )
-    return gatewayByTime
-    
+        # datetime will be easier to fill against
+        dt = datetime.strptime('%s %s' % (data_tuple[0], data_tuple[1]), "%Y/%m/%d %H")
+        gatewayByDateTime.append( (dt, gateway, int(data_tuple[2]), int(data_tuple[3])))
+    return gatewayByDateTime
 
 def parse_file_for_data(rpt):
     """
     Return a list of tuples:
-    [(Date in format YYYY/MM/DD, HH24, DocCount, CharacterCount), ...]
+    [ GatewayByDateTimeTuple, ...]
     Presumably there will only be one tuple for Date, HH pair.
     """
 
@@ -107,7 +95,7 @@ def parse_file_for_data(rpt):
     gateway = re.findall("DATE \(YYYY/MM/DD HH24\),(?P<gateway>[a-zA-Z0-9 ]+) Docs,chars\n",data)[0]
 
     # Create new tuple with gateway included
-    return formGatewayByTime(gateway, dataByTime)
+    return formGatewayByDateTime(gateway, dataByTime)
 
 def parse_files(path="sample_sql"):
     """
@@ -164,7 +152,6 @@ def write_report(data,rptFormat='CSV',name=None):
         raise Exception("Report expects a dictionary to write out")
 
     if not name:
-        from datetime import datetime
         date = datetime.now()
         name = '%s%02i%02i.csv' % (date.year, date.month, date.day)
 
@@ -185,6 +172,13 @@ def munge_data(data=parse_files,docs=True,chars=True,gateway=True,fill=False):
 
     if type(data) == types.FunctionType:
         data = data()
+
+    # Lets organize our data
+    data.sort()
+
+    if fill:
+        # We need to fill in the missing date times for our data
+        data = fill_missing_dt(data)
 
     # Lets create our nice organized struct.
     # Date dictionary whose keys will be to Hours in the Day.
