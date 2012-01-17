@@ -5,7 +5,7 @@ import gateway_rpt_utils
 class testGateway_utils(unittest.TestCase):
 
     def setUp(self):
-        self.gateway = 'inbound gvp' 
+        self.gateway = 'inbound gvp'
         self.dataByTime = [('2010/12/31', '00', '5', '2179'), ('2010/12/31', '01', '5', '21950')]
 
         dt1 = datetime.strptime('2010/12/31 00','%Y/%m/%d %H')
@@ -45,12 +45,12 @@ class testGateway_utils(unittest.TestCase):
         self.assertEquals(gatewayByDateTimes[1], self.gwbt2)
 
     def testFillMissingDT(self):
-        
+
         gatewayByDateTimes = gateway_rpt_utils.formGatewayByDateTime(self.gateway, self.dataByTime)
         self.assertEquals(gatewayByDateTimes[0], self.gwbt1)
         filled = gateway_rpt_utils.fill_missing_dt(gatewayByDateTimes)
         for i in range(2,24):
-            self.assertEquals(filled[i], (self.gwbt1[0]+timedelta(hours=i),self.gwbt1[1],self.gwbt1[2],0,0))
+            self.assertEquals(filled[i], (self.gwbt1[0]+timedelta(hours=i),self.gwbt1[1],0,0))
 
     def testCharsOnly(self):
         """
@@ -61,5 +61,10 @@ class testGateway_utils(unittest.TestCase):
 
         self.assertEquals(data['2010/12/31']['00']['Chars'], 2179)
         self.assertEquals(len(data['2010/12/31']['00'].keys()), 1)
-        self.assertEquals(len(data['2010/12/31'].keys()), 24)
+        self.assertEquals(len(data['2010/12/31'].keys()), 2)
         self.assertEquals(len(data.keys()), 20)
+
+        data = gateway_rpt_utils.munge_data(gateway=False,docs=False,fill=True)
+
+        self.assertEquals(len(data['2010/12/31']['00'].keys()), 1)
+        self.assertEquals(len(data['2010/12/31'].keys()), 24)

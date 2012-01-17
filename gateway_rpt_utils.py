@@ -2,7 +2,7 @@
 """
 This module munges data from flat files created by sql queries.
 
-Author  Justin Barber 
+Author  Justin Barber
 Email   barber(dot)justin(at)gmail.com
 Version .01
 """
@@ -28,7 +28,7 @@ def get_reports(path):
 
 def fill_missing_dt(GatewayByDateTimes):
     """
-    If a Date is missing an hour add it with 0 values 
+    If a Date is missing an hour add it with 0 values
     """
 
     last = None
@@ -38,22 +38,23 @@ def fill_missing_dt(GatewayByDateTimes):
         if not last:
             if gwbdt[0].hour != 0:
                 for i in range(0, gwbdt[0].hour):
-                    filled.append((gwbdt[0] + timedelta(hours=i),gwbdt[1],gwbt[2],0,0))
+                    filled.append((gwbdt[0] + timedelta(hours=i),gwbdt[1],0,0))
         else:
             # We sorted so we can assume gwbdt is larger then last
             # Timedelta returns in seconds
             delta = (gwbdt[0] - last[0]).seconds / 3600
             for i in range(1,int(delta)):
                 newdt = last[0] + timedelta(hours=i)
-                filled.append((last[0] + timedelta(hours=i),last[1],last[2],0,0))
+                filled.append((last[0] + timedelta(hours=i),last[1],0,0))
 
         # for range exludes last item in range so lets append it
         last = gwbdt
         filled.append(gwbdt)
 
     if last[0].hour != 23:
-        filled.append((datetime(last[0].year,last[0].month,last[0].day,23,0),gwbdt[1],gwbdt[2],0,0))
-        filled = fill_missing_dt(filled) 
+        filled.append((datetime(last[0].year,last[0].month,last[0].day,23,0),gwbdt[1],0,0))
+        filled = fill_missing_dt(filled)
+    print filled
 
     return filled
 
@@ -63,7 +64,7 @@ def formGatewayByDateTime(gateway, data_tuples_list):
     given the gateway and data associated with it.
 
     Format ( datetime object, Gateway, Docs, Chars )
-    
+
     If fill is passed then missing hours are added with data
     counts of 0.
     """
@@ -82,7 +83,7 @@ def parse_file_for_data(rpt):
     Presumably there will only be one tuple for Date, HH pair.
     """
 
-    # Open file and perform regular expression search 
+    # Open file and perform regular expression search
     # using the Parentheses Symbolic Group Name. We do
     # this so we can match the whole line, but have the items
     # automatically split out for us.
@@ -91,7 +92,7 @@ def parse_file_for_data(rpt):
     dataByTime = re.findall("(?P<date>[0-9]{4}/[0-9]{2}/[0-9]{2}) (?P<hh>[0-9]{2}),(?P<docs>[0-9]+),(?P<chars>[0-9]+)\n",data)
 
     # We need to get the gateway this data is for.
-    # Assumed each file only has data for one gateway. 
+    # Assumed each file only has data for one gateway.
     gateway = re.findall("DATE \(YYYY/MM/DD HH24\),(?P<gateway>[a-zA-Z0-9 ]+) Docs,chars\n",data)[0]
 
     # Create new tuple with gateway included
@@ -140,7 +141,7 @@ def write_dictionary(data,*args):
         retVal += str(data) +"\n"
         return retVal
     return retVal
-       
+
 def write_report(data,rptFormat='CSV',name=None):
     """
     Given the data dictionary write out the report.
@@ -182,58 +183,27 @@ def munge_data(data=parse_files,docs=True,chars=True,gateway=True,fill=False):
 
     # Lets create our nice organized struct.
     # Date dictionary whose keys will be to Hours in the Day.
-    # Hours in the Day will point to Gateways or just Doc and Char counts. 
+    # Hours in the Day will point to Gateways or just Doc and Char counts.
     # If gateway=False then the Hours in the Day only point to Doc/Char counts.
     dates = {}
 
     # need to update using setdefault
-    for piece in data:
-        if not dates.has_key(piece[0]):
-            if gateway:
-                if chars and docs:
-                    dates[piece[0]]={piece[1]:{piece[2]:{'Docs':piece[3],'Chars':piece[4]}}}
-                elif chars:
-                    dates[piece[0]]={piece[1]:{piece[2]:{'Chars':piece[4]}}}
-                else:
-                    dates[piece[0]]={piece[1]:{piece[2]:{'Docs':piece[3]}}}
-            else:
-                if chars and docs:
-                    dates[piece[0]]={piece[1]:{'Docs':piece[3],'Chars':piece[4]}}
-                elif chars:
-                    dates[piece[0]]={piece[1]:{'Chars':piece[4]}}
-                else:
-                    dates[piece[0]]={piece[1]:{'Docs':piece[3]}}
-        else:
-            if not dates[piece[0]].has_key(piece[1]):
-                if gateway:
-                    if chars and docs:
-                        dates[piece[0]][piece[1]]={piece[2]:{'Docs':piece[3],'Chars':piece[4]}}
-                    elif chars:
-                        dates[piece[0]][piece[1]]={piece[2]:{'Chars':piece[4]}}
-                    else:
-                        dates[piece[0]][piece[1]]={piece[2]:{'Docs':piece[3]}}
-                else:
-                    if chars and docs:
-                        dates[piece[0]][piece[1]]={'Docs':piece[3],'Chars':piece[4]}
-                    elif chars:
-                        dates[piece[0]][piece[1]]={'Chars':piece[4]}
-                    else:
-                        dates[piece[0]][piece[1]]={'Docs':piece[3]}
-            else:
-                Hour = dates[piece[0]][piece[1]]
-                if gateway:
-                    if not Hour.has_key(piece[2]):
-                        if chars and docs:
-                            Hour[piece[2]]={'Docs':piece[3],'Chars':piece[4]}
-                        elif chars:
-                            Hour[piece[2]]={'Chars':piece[4]}
-                        else:
-                            Hour[piece[2]]={'Docs':piece[3]}
-                else:
-                    if chars:
-                        Hour['Chars'] += piece[4]
-                    if docs:
-                        Hour['Docs'] += piece[3]
+    for dt, gwy_nm, doc_cnt, char_cnt in data:
+        # set up our entry
+        _entry = {}
+
+        # are we storing characters and documents?
+        if chars:
+            _entry['Chars'] = char_cnt
+        if docs:
+            _entry['Docs'] = doc_cnt
+
+        # are we storing by gateway?
+        if gateway:
+            _entry = {gw_nm:_entry}
+
+        # add our date entry passing the hour entry as default
+        date_entry = dates.setdefault(dt.date().strftime('%Y/%m/%d'),{}).setdefault(dt.strftime('%H'),_entry)
 
     return dates
 
@@ -242,9 +212,9 @@ def test_function(*args):
     print 'Argument Lenght ',len(args)
     for arg in args:
         print arg
-        
+
 if __name__ == "__main__":
-    #masticated_mess = parse_files("sample_sql") 
-    #masticated_mess = parse_files() 
+    #masticated_mess = parse_files("sample_sql")
+    #masticated_mess = parse_files()
     dates = munge_data(gateway=False,docs=False)
     write_report(dates)
